@@ -1,0 +1,13 @@
+{
+  "name": "claude-usage-band",
+  "owner": {
+    "name": "aliyusufergin"
+  },
+  "description": "Claude Code için context, 5 saatlik ve haftalık kullanım bandı",
+  "plugins": [
+    {
+      "name": "usage-band",
+      "source": "./"
+    }
+  ]
+}
