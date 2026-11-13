@@ -42,7 +42,7 @@ const LAYOUTS: Layout[] = [
   { showPies: false, showReset: false },
 ]
 
-export const buildParts = (snap: Snapshot | null, model: ModelInfo, now: number, layout: Layout): Part[] => {
+const buildParts = (snap: Snapshot | null, model: ModelInfo, now: number, layout: Layout): Part[] => {
   const meter = (label: string, percent: number | undefined): Part[] => {
     if (percent === undefined) return [{ text: `${label} —`, dim: true }]
     const color = colorOf(percent)

@@ -22,7 +22,6 @@ export const toSnapshot = (u: {
   rateLimits: SessionRateLimit[]
 }): Snapshot => ({
   contextPercent: u.context.percent,
-  contextTokens: u.context.tokens,
   limits: u.rateLimits.map(l => ({ kind: l.kind, percent: l.percentUsed, resetsAt: l.resetsAt })),
 })
 

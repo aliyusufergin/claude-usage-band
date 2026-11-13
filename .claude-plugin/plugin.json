@@ -1,6 +1,6 @@
 {
   "name": "usage-band",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Prompt üstünde model, effort, context, 5 saatlik ve haftalık kullanımı gösteren bant",
   "author": { "name": "aliyusufergin", "email": "aliyusufergin@gmail.com" },
   "types": "./types/index.d.ts",

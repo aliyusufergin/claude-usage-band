@@ -2,7 +2,6 @@ export type Limit = { kind: string; percent: number; resetsAt?: string }
 
 export type Snapshot = {
   contextPercent?: number
-  contextTokens?: number
   limits: Limit[]
 }
 
