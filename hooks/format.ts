@@ -76,17 +76,6 @@ export const cells = (percent: number, width: number) => {
 /** Tek karakterlik pasta: ○ ◔ ◑ ◕ ●. */
 export const pie = (percent: number) => '○◔◑◕●'.charAt(Math.round(clamp(percent) / 25))
 
-const MODES: Record<string, { text: string; color: string }> = {
-  auto: { text: '⏵⏵ auto', color: 'autoAccept' },
-  acceptEdits: { text: '⏵⏵ edits', color: 'autoAccept' },
-  plan: { text: '⏸ plan', color: 'planMode' },
-  bypassPermissions: { text: '⏵⏵ bypass', color: 'error' },
-  dontAsk: { text: '⏵⏵ dontAsk', color: 'permission' },
-}
-
-/** İzin modunun etiketi; `default` ve bilinmeyen modlar için yok. */
-export const modeOf = (mode: string | undefined) => (mode ? MODES[mode] : undefined)
-
 export const formatPercent = (p: number) => `${Math.round(p)}%`
 
 export const formatTokens = (n: number) =>

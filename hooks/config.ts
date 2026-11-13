@@ -8,7 +8,6 @@ export type Config = {
   dangerAt: number
   barWidth: number
   showModel: boolean
-  showMode: boolean
   showEffort: boolean
   showCompact: boolean
   showReset: boolean
@@ -23,7 +22,6 @@ export const DEFAULTS: Config = {
   dangerAt: 90,
   barWidth: 10,
   showModel: true,
-  showMode: true,
   showEffort: true,
   showCompact: true,
   showReset: true,

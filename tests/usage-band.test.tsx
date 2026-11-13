@@ -47,9 +47,6 @@ const engine = (on: On, stored?: Record<string, unknown>): Seen => {
   on('turn.step', async function* (_$, e) {
     return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn', usage: null } as never
   })
-  // Settings hooks beneath: none, so nothing is added.
-  on('classic.UserPromptSubmit', () => ({}))
-  on('classic.Stop', () => ({}))
   // The engine's own band: nothing.
   on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
     const { Box } = $.ui.resolve(e)
@@ -150,27 +147,6 @@ test('narrow band drops the bars, then the countdowns', async ($, on) => {
   expect(text).not.toContain('⛁')
   expect(text).not.toContain('◔')
   expect(text).toContain('5h 23%')
-})
-
-test('band shows the main loop permission mode, not a subagent one', async ($, on) => {
-  engine(on)
-  await $.session.measure(measure(23, 61))
-  const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'terminal', component: 'AbovePrompt', props: bandProps(200) })
-  const text = async () => (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
-
-  expect(await text()).not.toContain('⏵⏵')
-
-  await $.classic.UserPromptSubmit({ prompt: 'merhaba', permission_mode: 'auto' })
-  expect(await text()).toContain('⏵⏵ auto')
-
-  await $.classic.Stop({ stop_hook_active: false, permission_mode: 'plan', agent_id: 'a1' } as never)
-  expect(await text()).toContain('⏵⏵ auto')
-
-  await $.classic.Stop({ stop_hook_active: false, permission_mode: 'plan' } as never)
-  expect(await text()).toContain('⏸ plan')
-
-  await $.classic.UserPromptSubmit({ prompt: 'devam', permission_mode: 'default' })
-  expect(await text()).not.toContain('⏸')
 })
 
 test('/usage-band hides the band and toggles compact mode', async ($, on) => {

@@ -14,7 +14,6 @@ import {
   isSameWindow,
   labelOf,
   levelOf,
-  modeOf,
   nameOf,
   pie,
   prettyModel,
@@ -24,7 +23,6 @@ import {
 const snapAtom = atom({ plugin: 'usage-band', key: 'snap' } as const, null)
 const modelAtom = atom({ plugin: 'usage-band', key: 'model' } as const, {})
 const compactAtom = atom({ plugin: 'usage-band', key: 'compactAt' } as const, null)
-const modeAtom = atom({ plugin: 'usage-band', key: 'mode' } as const, null)
 const prefsAtom = atom({ plugin: 'usage-band', key: 'prefs' } as const, { isHidden: false, isCompact: false })
 
 // $.store keys, kept across sessions.
@@ -53,7 +51,6 @@ const layoutsFor = (config: Config, prefs: Prefs): Layout[] => {
 export const buildParts = (
   snap: Snapshot | null,
   model: ModelInfo,
-  mode: string | null,
   compactAt: number | null,
   now: number,
   layout: Layout,
@@ -83,9 +80,6 @@ export const buildParts = (
   } else if (effort) {
     groups.push([{ text: effort, dim: true }])
   }
-
-  const modeLabel = config.showMode ? modeOf(mode ?? undefined) : undefined
-  if (modeLabel) groups.push([modeLabel])
 
   const ctx = meter('ctx', snap?.contextPercent, cellGauge)
   if (layout.showCompact && compactAt !== null && snap?.contextTokens !== undefined) {
@@ -178,13 +172,6 @@ async function alertLimits($: EngineInterface, limits: SessionRateLimit[], confi
   if (isChanged) await $.store.set(ALERTED_KEY, next)
 }
 
-/** Ana döngünün izin modunu kaydeder; alt ajanlarınkini yok sayar. */
-async function trackMode($: EngineInterface, e: { permission_mode?: string; agent_id?: string }) {
-  if (e.agent_id || !e.permission_mode) return
-  const mode = e.permission_mode
-  if ((await read($, modeAtom)) !== mode) await update($, modeAtom, () => mode)
-}
-
 export const register: Register = (on, options) => {
   const config = readConfig(options)
   // A reload may bring new options: read the threshold afresh.
@@ -243,21 +230,6 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // İzin modu yalnızca klasik hook olaylarıyla gelir: istem, araç çağrısı ve tur sonu.
-  // Shift+Tab ile değişen mod bir sonraki bu olaylardan birinde banda yansır.
-  on('classic.UserPromptSubmit', async ($, e, next) => {
-    await trackMode($, e)
-    return next(e)
-  })
-  on('classic.PostToolUse', async ($, e, next) => {
-    await trackMode($, e)
-    return next(e)
-  })
-  on('classic.Stop', async ($, e, next) => {
-    await trackMode($, e)
-    return next(e)
-  })
-
   // The model and effort the main loop actually sends, after /model or a fallback.
   on('turn.step', async function* ($, e, next) {
     if (!e.agentId) {
@@ -281,10 +253,9 @@ export const register: Register = (on, options) => {
     if (!snap && !model.model) return next(e)
 
     const compactAt = await read($, compactAtom)
-    const mode = await read($, modeAtom)
     const now = await $.clock.now()
     const columns = e.props.bodyColumns
-    const candidates = layoutsFor(config, prefs).map(layout => buildParts(snap, model, mode, compactAt, now, layout, config))
+    const candidates = layoutsFor(config, prefs).map(layout => buildParts(snap, model, compactAt, now, layout, config))
     const parts = candidates.find(p => widthOf(p) <= columns) ?? candidates[candidates.length - 1] ?? []
 
     const { Box, Text } = $.ui.resolve(e)

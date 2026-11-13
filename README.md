@@ -3,11 +3,10 @@
 Claude Code için prompt'un üstünde tek satırlık bir kullanım bandı:
 
 ```
-⏺ Opus 5.5 high   ⏵⏵ auto   ctx ⛁⛁⛁⛁⛶⛶⛶⛶⛶⛶ 42% ⇣60k   5h ◔ 23% ↻1s12d   7d ◑ 61% ↻3g   $1.24
+⏺ Opus 5.5 high   ctx ⛁⛁⛁⛁⛶⛶⛶⛶⛶⛶ 42% ⇣60k   5h ◔ 23% ↻1s12d   7d ◑ 61% ↻3g   $1.24
 ```
 
 - **Model ve effort:** ana döngünün gönderdiği son istekten
-- **İzin modu:** `⏵⏵ auto`, `⏵⏵ edits`, `⏸ plan`, `⏵⏵ bypass`; varsayılan modda görünmez. Shift+Tab ile yapılan değişiklik bir sonraki istemde, araç çağrısında ya da tur sonunda banda yansır
 - **ctx:** `/context`'teki gibi disk hücreleri (⛁ dolu, ⛀ yarım, ⛶ boş) ve auto-compact'a kalan token (⇣)
 - **5h / 7d:** 5 saatlik ve haftalık kullanım limiti tek bir pasta daireyle (○◔◑◕●), sıfırlanmaya kalan süre (g = gün, s = saat, d = dakika)
 - **Maliyet:** oturumun API maliyeti
@@ -54,7 +53,7 @@ Bu tercihler oturumlar arası hatırlanır.
 | Sistem bildirimi | açık | Kritik eşikte masaüstü bildirimi |
 | Sarı / kırmızı renk eşiği (%) | 70 / 90 | Renk geçişleri |
 | Çubuk genişliği | 10 | Context hücre sayısı; 0 verilirse hücre ve daire yok |
-| Modeli / izin modunu / effort'u / compact mesafesini / geri sayımı / maliyeti göster | açık | Bölümleri tek tek aç/kapa |
+| Modeli / effort'u / compact mesafesini / geri sayımı / maliyeti göster | açık | Bölümleri tek tek aç/kapa |
 
 ## Geliştirme
 
