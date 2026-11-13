@@ -8,13 +8,15 @@ import {
   cells,
   colorOf,
   countdown,
-  formatCost,
+  formatDuration,
   formatPercent,
   formatTokens,
+  hasReset,
   isSameWindow,
   labelOf,
   levelOf,
   nameOf,
+  paceOf,
   pie,
   prettyModel,
   toSnapshot,
@@ -23,6 +25,7 @@ import {
 const snapAtom = atom({ plugin: 'usage-band', key: 'snap' } as const, null)
 const modelAtom = atom({ plugin: 'usage-band', key: 'model' } as const, {})
 const compactAtom = atom({ plugin: 'usage-band', key: 'compactAt' } as const, null)
+const turnBaseAtom = atom({ plugin: 'usage-band', key: 'turnBase' } as const, null)
 const prefsAtom = atom({ plugin: 'usage-band', key: 'prefs' } as const, { isHidden: false, isCompact: false })
 
 // $.store keys, kept across sessions.
@@ -32,19 +35,21 @@ const ALERTED_KEY = 'alerted'
 type Alerted = Record<string, { level: number; resetsAt?: string }>
 
 type Part = { text: string; color?: string; dim?: boolean }
-type Layout = { barWidth: number; showReset: boolean; showCompact: boolean }
+/** `showExtras`: the context's turn growth and distance to auto-compact. */
+type Layout = { barWidth: number; showReset: boolean; showExtras: boolean }
 
 const SEP: Part = { text: '   ' }
 
 /** Widest first; the band takes the first one that fits its columns. */
 const layoutsFor = (config: Config, prefs: Prefs): Layout[] => {
   const widest = prefs.isCompact ? 0 : config.barWidth
+  const { showReset } = config
   return [
-    { barWidth: widest, showReset: config.showReset, showCompact: config.showCompact },
-    { barWidth: Math.min(widest, 5), showReset: config.showReset, showCompact: config.showCompact },
-    { barWidth: 0, showReset: config.showReset, showCompact: config.showCompact },
-    { barWidth: 0, showReset: false, showCompact: config.showCompact },
-    { barWidth: 0, showReset: false, showCompact: false },
+    { barWidth: widest, showReset, showExtras: true },
+    { barWidth: Math.min(widest, 5), showReset, showExtras: true },
+    { barWidth: 0, showReset, showExtras: true },
+    { barWidth: 0, showReset: false, showExtras: true },
+    { barWidth: 0, showReset: false, showExtras: false },
   ]
 }
 
@@ -52,6 +57,7 @@ export const buildParts = (
   snap: Snapshot | null,
   model: ModelInfo,
   compactAt: number | null,
+  turnBase: number | null,
   now: number,
   layout: Layout,
   config: Config,
@@ -82,8 +88,13 @@ export const buildParts = (
   }
 
   const ctx = meter('ctx', snap?.contextPercent, cellGauge)
-  if (layout.showCompact && compactAt !== null && snap?.contextTokens !== undefined) {
-    const left = compactAt - snap.contextTokens
+  const tokens = snap?.contextTokens
+  if (layout.showExtras && config.showDelta && turnBase !== null && tokens !== undefined) {
+    const grown = tokens - turnBase
+    if (grown >= 1000) ctx.push({ text: ` +${formatTokens(grown)}`, dim: true })
+  }
+  if (layout.showExtras && config.showCompact && compactAt !== null && tokens !== undefined) {
+    const left = compactAt - tokens
     ctx.push(
       left > 0
         ? { text: ` ⇣${formatTokens(left)}`, dim: true }
@@ -93,13 +104,19 @@ export const buildParts = (
   groups.push(ctx)
 
   for (const limit of snap?.limits ?? []) {
+    // The window closed while idle: the reading is stale until the next request.
+    if (hasReset(limit.resetsAt, now)) {
+      groups.push([{ text: `${labelOf(limit.kind)} sıfırlandı`, dim: true }])
+      continue
+    }
     const group = meter(labelOf(limit.kind), limit.percent, pieGauge)
+    if (config.showPace && paceOf(limit.kind, limit.percent, limit.resetsAt, now)?.isAhead) {
+      group.push({ text: '▲', color: 'warning' })
+    }
     const left = layout.showReset ? countdown(limit.resetsAt, now) : undefined
     if (left) group.push({ text: ` ↻${left}`, dim: true })
     groups.push(group)
   }
-
-  if (config.showCost && snap?.costUsd !== undefined) groups.push([{ text: formatCost(snap.costUsd), dim: true }])
 
   return groups.flatMap((group, i) => (i === 0 ? group : [SEP, ...group]))
 }
@@ -125,21 +142,15 @@ async function savePrefs($: EngineInterface, fn: (p: Prefs) => Prefs) {
   return prefs
 }
 
-// The model whose compaction threshold `compactAtom` holds.
-let compactFor: string | undefined
-let isCompactKnown = false
-
+/** Re-reads the threshold each time: the model or /config can change it. */
 async function refreshCompact($: EngineInterface, config: Config) {
   if (!config.showCompact) return
-  const { model } = await read($, modelAtom)
-  if (isCompactKnown && compactFor === model) return
   // `summary` estimates locally: no token-count requests.
   const usage = await $.session.usage({ breakdown: 'summary' })
   const breakdown = usage.context.breakdown
-  const at = breakdown?.isAutoCompactEnabled ? (breakdown.autoCompactThreshold ?? null) : null
+  if (!breakdown) return
+  const at = breakdown.isAutoCompactEnabled ? (breakdown.autoCompactThreshold ?? null) : null
   await update($, compactAtom, () => at)
-  compactFor = model
-  isCompactKnown = breakdown !== undefined
 }
 
 async function alertLimits($: EngineInterface, limits: SessionRateLimit[], config: Config) {
@@ -162,7 +173,14 @@ async function alertLimits($: EngineInterface, limits: SessionRateLimit[], confi
     if (level <= was) continue
 
     const left = countdown(limit.resetsAt, now)
-    const text = `${nameOf(limit.kind)} kullanım %${Math.round(limit.percentUsed)}${left ? ` · sıfırlanmaya ${left}` : ''}`
+    const pace = limit.percentUsed < 100 ? paceOf(limit.kind, limit.percentUsed, limit.resetsAt, now) : undefined
+    const text = [
+      `${nameOf(limit.kind)} kullanım %${Math.round(limit.percentUsed)}`,
+      left && `sıfırlanmaya ${left}`,
+      pace?.isAhead && `bu hızla ${formatDuration(pace.untilFull)} içinde dolar`,
+    ]
+      .filter(Boolean)
+      .join(' · ')
     $.ui.toast(text, { timeoutMs: 8000 })
     if (config.notify && level >= config.notifyAt && was < config.notifyAt) {
       await $.ui.notify(text, { title: 'Claude kullanım limiti' })
@@ -174,8 +192,6 @@ async function alertLimits($: EngineInterface, limits: SessionRateLimit[], confi
 
 export const register: Register = (on, options) => {
   const config = readConfig(options)
-  // A reload may bring new options: read the threshold afresh.
-  isCompactKnown = false
 
   let tick: Timer | undefined
 
@@ -199,9 +215,15 @@ export const register: Register = (on, options) => {
     })
 
     // Countdowns move while the session is idle: redraw once a minute.
+    // Skipped while nothing on the band depends on the time.
+    const redraw = async () => {
+      if ((await read($, prefsAtom)).isHidden) return
+      if (!(await read($, snapAtom))?.limits.length) return
+      await $.ui.invalidate('ui.render')
+    }
     tick?.cancel()
     tick = $.clock.every(60_000, () => {
-      void $.ui.invalidate('ui.render')
+      void redraw()
     })
 
     return result
@@ -224,9 +246,22 @@ export const register: Register = (on, options) => {
   })
 
   on('session.measure', async ($, e, next) => {
-    await update($, snapAtom, () => toSnapshot(e))
+    const snap = toSnapshot(e)
+    await update($, snapAtom, () => snap)
+    // A compaction mid-turn shrinks the context: count growth from there.
+    const tokens = snap.contextTokens
+    if (tokens !== undefined) await update($, turnBaseAtom, base => (base !== null && tokens < base ? tokens : base))
     if (e.changed.includes('context')) await refreshCompact($, config)
     if (e.changed.includes('rateLimits')) await alertLimits($, e.rateLimits, config)
+    return next(e)
+  })
+
+  // Context growth is counted from the start of the main loop's turn.
+  on('turn.start', async ($, e, next) => {
+    if (!e.agentId) {
+      const snap = await read($, snapAtom)
+      await update($, turnBaseAtom, () => snap?.contextTokens ?? null)
+    }
     return next(e)
   })
 
@@ -253,9 +288,10 @@ export const register: Register = (on, options) => {
     if (!snap && !model.model) return next(e)
 
     const compactAt = await read($, compactAtom)
+    const turnBase = await read($, turnBaseAtom)
     const now = await $.clock.now()
     const columns = e.props.bodyColumns
-    const candidates = layoutsFor(config, prefs).map(layout => buildParts(snap, model, compactAt, now, layout, config))
+    const candidates = layoutsFor(config, prefs).map(layout => buildParts(snap, model, compactAt, turnBase, now, layout, config))
     const parts = candidates.find(p => widthOf(p) <= columns) ?? candidates[candidates.length - 1] ?? []
 
     const { Box, Text } = $.ui.resolve(e)

@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
 import { readConfig } from '../hooks/config'
-import { countdown, isSameWindow, levelOf, prettyModel } from '../hooks/format'
+import { countdown, isSameWindow, levelOf, paceOf, prettyModel } from '../hooks/format'
 
 const NOW = Date.parse('2026-10-17T12:00:00Z')
 const SURFACES = ['terminal', 'desktop'] as const
@@ -14,18 +14,29 @@ const measure = (fiveHour: number, sevenDay: number, fiveHourReset = FIVE_HOUR_R
     { kind: 'five_hour', percentUsed: fiveHour, resetsAt: fiveHourReset },
     { kind: 'seven_day', percentUsed: sevenDay, resetsAt: '2026-10-20T12:00:00Z' },
   ],
-  cost: { usd: 1.237 },
-  changed: ['context', 'rateLimits', 'cost'] as ('context' | 'rateLimits' | 'cost')[],
+  changed: ['context', 'rateLimits'] as ('context' | 'rateLimits')[],
 })
 
-type Seen = { toasts: string[]; notices: string[] }
+const withContext = (tokens: number) => ({
+  ...measure(23, 61),
+  context: { tokens, window: 200_000, percent: Math.round((tokens / 200_000) * 100) },
+  changed: ['context'] as 'context'[],
+})
+
+const drain = async (gen: AsyncIterable<unknown>) => {
+  for await (const _ of gen) {
+    // drain
+  }
+}
+
+type Seen = { toasts: string[]; notices: string[]; clock: ReturnType<typeof mock.clock> }
 
 /** Stands in for the engine beneath the plugin, recording toasts and notifications. */
 const engine = (on: On, stored?: Record<string, unknown>): Seen => {
-  const seen: Seen = { toasts: [], notices: [] }
-  mock.clock(on, { now: NOW })
+  const seen: Seen = { toasts: [], notices: [], clock: mock.clock(on, { now: NOW }) }
   mock.store(on, stored)
   on('session.measure', (_$, e) => ({ changed: e.changed }))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
   on('session.usage', () => ({
     value: {
       startedAt: NOW,
@@ -73,11 +84,24 @@ const runCommand = (args: string) => ({
 })
 
 describe('format', () => {
-  test('countdown in Turkish units', () => {
-    expect(countdown('2026-10-17T12:45:00Z', NOW)).toBe('45d')
-    expect(countdown('2026-10-17T13:12:00Z', NOW)).toBe('1s12d')
-    expect(countdown('2026-10-20T16:00:00Z', NOW)).toBe('3g4s')
+  test('countdown in English units', () => {
+    expect(countdown('2026-10-17T12:45:00Z', NOW)).toBe('45m')
+    expect(countdown('2026-10-17T13:12:00Z', NOW)).toBe('1h12m')
+    expect(countdown('2026-10-20T16:00:00Z', NOW)).toBe('3d4h')
+    expect(countdown('2026-10-17T11:59:00Z', NOW)).toBe(undefined)
     expect(countdown(undefined, NOW)).toBe(undefined)
+  })
+
+  test('pace', () => {
+    // 4 of 7 days gone, 61% used: ends near 107%, runs out in ~2.6 days.
+    const week = paceOf('seven_day', 61, '2026-10-20T12:00:00Z', NOW)
+    expect(week?.isAhead).toBe(true)
+    expect(Math.round(week?.projected ?? 0)).toBe(107)
+    // 228 of 300 minutes gone, 23% used: well within.
+    expect(paceOf('five_hour', 23, FIVE_HOUR_RESET, NOW)?.isAhead).toBe(false)
+    // Too early in the window to tell.
+    expect(paceOf('five_hour', 20, '2026-10-17T16:50:00Z', NOW)).toBe(undefined)
+    expect(paceOf('spend_limit', 50, FIVE_HOUR_RESET, NOW)).toBe(undefined)
   })
 
   test('model names', () => {
@@ -96,10 +120,16 @@ describe('format', () => {
   })
 
   test('config falls back to defaults on bad values', () => {
-    const config = readConfig({ barWidth: 50, showCost: 'yes', toastAt: 75 })
+    const config = readConfig({ barWidth: 50, showPace: 'yes', toastAt: 75 })
     expect(config.barWidth).toBe(20)
-    expect(config.showCost).toBe(true)
+    expect(config.showPace).toBe(true)
     expect(config.toastAt).toBe(75)
+  })
+
+  test('config orders thresholds given the wrong way round', () => {
+    const config = readConfig({ warnAt: 95, dangerAt: 60, toastAt: 99, notifyAt: 70 })
+    expect([config.warnAt, config.dangerAt]).toEqual([60, 95])
+    expect([config.toastAt, config.notifyAt]).toEqual([70, 99])
   })
 })
 
@@ -108,31 +138,27 @@ for (const surface of SURFACES) {
     engine(on)
 
     await $.session.measure(measure(23, 61))
-    for await (const _ of $.turn.step({ turnId: 't', index: 0, model: 'claude-opus-5-5', effort: 'high', messageCount: 1 })) {
-      // drain
-    }
-    // The model change makes the next measurement re-read the compaction threshold.
-    await $.session.measure(measure(23, 61))
+    await drain($.turn.step({ turnId: 't', index: 0, model: 'claude-opus-5-5', effort: 'high', messageCount: 1 }))
 
     const ui = await $.ui.mount({ plugin: 'usage-band', surface, component: 'AbovePrompt', props: bandProps(200) })
     const text = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
 
     expect(text).toContain('⏺ Opus 5.5 high')
     expect(text).toContain('ctx ⛁⛁⛁⛁⛶⛶⛶⛶⛶⛶ 42% ⇣60k')
-    expect(text).toContain('5h ◔ 23% ↻1s12d')
-    expect(text).toContain('7d ◑ 61% ↻3g')
-    expect(text).toContain('$1.24')
+    expect(text).toContain('5h ◔ 23% ↻1h12m')
+    expect(text).toContain('7d ◑ 61%▲ ↻3d')
+    expect(text).not.toContain('$')
   })
 }
 
-test('options hide segments and narrow the bars', { options: { showCost: false, showModel: false, barWidth: 4 } }, async ($, on) => {
+test('options hide segments and narrow the bars', { options: { showPace: false, showModel: false, barWidth: 4 } }, async ($, on) => {
   engine(on)
   await $.session.measure(measure(50, 61))
 
   const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'terminal', component: 'AbovePrompt', props: bandProps(200) })
   const text = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
 
-  expect(text).not.toContain('$')
+  expect(text).not.toContain('▲')
   expect(text).toContain('ctx ⛁⛀⛶⛶ 42%')
   expect(text).toContain('5h ◑ 50%')
 })
@@ -177,11 +203,11 @@ test('alerts once per threshold per window, notifying at the critical one', asyn
   await $.session.measure(measure(82, 10, '2026-10-17T18:12:00Z'))
 
   expect(seen.toasts).toEqual([
-    '5 saatlik kullanım %81 · sıfırlanmaya 1s12d',
-    '5 saatlik kullanım %96 · sıfırlanmaya 1s12d',
-    '5 saatlik kullanım %82 · sıfırlanmaya 6s12d',
+    '5 saatlik kullanım %81 · sıfırlanmaya 1h12m · bu hızla 54m içinde dolar',
+    '5 saatlik kullanım %96 · sıfırlanmaya 1h12m · bu hızla 10m içinde dolar',
+    '5 saatlik kullanım %82 · sıfırlanmaya 6h12m',
   ])
-  expect(seen.notices).toEqual(['5 saatlik kullanım %96 · sıfırlanmaya 1s12d'])
+  expect(seen.notices).toEqual(['5 saatlik kullanım %96 · sıfırlanmaya 1h12m · bu hızla 10m içinde dolar'])
 })
 
 test('an alert already given in an earlier session is not repeated', async ($, on) => {
@@ -190,4 +216,45 @@ test('an alert already given in an earlier session is not repeated', async ($, o
   await $.session.measure(measure(83, 10))
 
   expect(seen.toasts).toEqual([])
+})
+
+test('a window that reset while idle is shown as reset', async ($, on) => {
+  const seen = engine(on)
+  await $.session.measure(measure(92, 61))
+  await seen.clock.advance(73 * 60_000)
+  const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'terminal', component: 'AbovePrompt', props: bandProps(200) })
+  const text = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
+
+  expect(text).toContain('5h sıfırlandı')
+  expect(text).not.toContain('92%')
+  expect(text).toContain('7d ◑ 61%')
+})
+
+test('ctx shows what the current main-loop turn added', async ($, on) => {
+  engine(on)
+  await $.session.measure(withContext(84_000))
+  await $.turn.start({ text: 'hi', turnId: 't1' } as never)
+  await $.turn.start({ text: 'sub', turnId: 's1', agentId: 'a1' } as never)
+  await $.session.measure(withContext(92_000))
+  const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'terminal', component: 'AbovePrompt', props: bandProps(200) })
+  const text = async () => (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
+
+  expect(await text()).toContain('46% +8k ⇣52k')
+
+  // A compaction mid-turn: growth counts again from the smaller context.
+  await $.session.measure(withContext(30_000))
+  await $.session.measure(withContext(33_000))
+  expect(await text()).toContain('17% +3k')
+})
+
+test("subagent steps leave the band's model alone", async ($, on) => {
+  engine(on)
+  await $.session.measure(measure(23, 61))
+  await drain($.turn.step({ turnId: 't', index: 0, model: 'claude-opus-5-5', effort: 'high', messageCount: 1 }))
+  await drain($.turn.step({ turnId: 's', index: 0, model: 'claude-haiku-5-5', messageCount: 1, agentId: 'a1' } as never))
+  const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'terminal', component: 'AbovePrompt', props: bandProps(200) })
+  const text = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
+
+  expect(text).toContain('⏺ Opus 5.5 high')
+  expect(text).not.toContain('Haiku')
 })

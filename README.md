@@ -3,13 +3,13 @@
 Claude Code için prompt'un üstünde tek satırlık bir kullanım bandı:
 
 ```
-⏺ Opus 5.5 high   ctx ⛁⛁⛁⛁⛶⛶⛶⛶⛶⛶ 42% ⇣60k   5h ◔ 23% ↻1s12d   7d ◑ 61% ↻3g   $1.24
+⏺ Opus 5.5 high   ctx ⛁⛁⛁⛁⛶⛶⛶⛶⛶⛶ 42% +8k ⇣60k   5h ◔ 23% ↻1h12m   7d ◑ 61%▲ ↻3d
 ```
 
 - **Model ve effort:** ana döngünün gönderdiği son istekten
-- **ctx:** `/context`'teki gibi disk hücreleri (⛁ dolu, ⛀ yarım, ⛶ boş) ve auto-compact'a kalan token (⇣)
-- **5h / 7d:** 5 saatlik ve haftalık kullanım limiti tek bir pasta daireyle (○◔◑◕●), sıfırlanmaya kalan süre (g = gün, s = saat, d = dakika)
-- **Maliyet:** oturumun API maliyeti
+- **ctx:** `/context`'teki gibi disk hücreleri (⛁ dolu, ⛀ yarım, ⛶ boş), son turun context'e eklediği token (+) ve auto-compact'a kalan token (⇣)
+- **5h / 7d:** 5 saatlik ve haftalık kullanım limiti tek bir pasta daireyle (○◔◑◕●), sıfırlanmaya kalan süre (d = gün, h = saat, m = dakika). Pencere boştayken sıfırlandıysa `sıfırlandı` yazar.
+- **Tempo (▲):** kullanım bu hızla sürerse limit sıfırlanmadan dolacaksa yüzdenin yanında sarı ▲ çıkar. Pencerenin ilk %10'unda gösterilmez.
 - Renkler: %70'e kadar yeşil, %70–90 sarı, %90 üstü kırmızı
 - Dar terminalde önce hücreler ve daireler, sonra geri sayım düşer
 
@@ -35,7 +35,7 @@ ardından açık oturumda `/reload-plugins`.
 
 ## Uyarılar
 
-5h veya 7d kullanımı uyarı eşiğini (%80) geçince bir toast, kritik eşiği (%95) geçince toast ve sistem bildirimi gelir. Her eşik, her limit penceresi için bir kez uyarır; bu bilgi oturumlar arası hatırlanır, pencere sıfırlanınca uyarılar yeniden devreye girer.
+5h veya 7d kullanımı uyarı eşiğini (%80) geçince bir toast (tempo öndeyse "bu hızla 54m içinde dolar" eklenir), kritik eşiği (%95) geçince toast ve sistem bildirimi gelir. Her eşik, her limit penceresi için bir kez uyarır; bu bilgi oturumlar arası hatırlanır, pencere sıfırlanınca uyarılar yeniden devreye girer.
 
 ## Komutlar
 
@@ -53,7 +53,9 @@ Bu tercihler oturumlar arası hatırlanır.
 | Sistem bildirimi | açık | Kritik eşikte masaüstü bildirimi |
 | Sarı / kırmızı renk eşiği (%) | 70 / 90 | Renk geçişleri |
 | Çubuk genişliği | 10 | Context hücre sayısı; 0 verilirse hücre ve daire yok |
-| Modeli / effort'u / compact mesafesini / geri sayımı / maliyeti göster | açık | Bölümleri tek tek aç/kapa |
+| Modeli / effort'u / tur artışını / compact mesafesini / geri sayımı / tempoyu göster | açık | Bölümleri tek tek aç/kapa |
+
+Eşikler ters girilirse (ör. sarı > kırmızı) küçük olan alt eşik sayılır.
 
 ## Geliştirme
 

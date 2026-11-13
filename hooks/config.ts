@@ -11,7 +11,8 @@ export type Config = {
   showEffort: boolean
   showCompact: boolean
   showReset: boolean
-  showCost: boolean
+  showPace: boolean
+  showDelta: boolean
 }
 
 export const DEFAULTS: Config = {
@@ -25,7 +26,8 @@ export const DEFAULTS: Config = {
   showEffort: true,
   showCompact: true,
   showReset: true,
-  showCost: true,
+  showPace: true,
+  showDelta: true,
 }
 
 export const readConfig = (options: PluginOptions | undefined): Config => {
@@ -35,5 +37,8 @@ export const readConfig = (options: PluginOptions | undefined): Config => {
     if (typeof value === typeof DEFAULTS[key]) (config as Record<string, unknown>)[key] = value
   }
   config.barWidth = Math.max(0, Math.min(20, Math.round(config.barWidth)))
+  // Thresholds given the wrong way round: keep the lower one first.
+  if (config.warnAt > config.dangerAt) [config.warnAt, config.dangerAt] = [config.dangerAt, config.warnAt]
+  if (config.toastAt > config.notifyAt) [config.toastAt, config.notifyAt] = [config.notifyAt, config.toastAt]
   return config
 }

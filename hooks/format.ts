@@ -1,4 +1,4 @@
-import type { SessionContextUsage, SessionCost, SessionRateLimit } from 'claude-code'
+import type { SessionContextUsage, SessionRateLimit } from 'claude-code'
 
 import type { Snapshot } from '../types'
 
@@ -20,13 +20,11 @@ export const nameOf = (kind: string) => NAMES[kind] ?? kind
 export const toSnapshot = (u: {
   context: SessionContextUsage
   rateLimits: SessionRateLimit[]
-  cost?: SessionCost
 }): Snapshot => ({
   contextPercent: u.context.percent,
   contextTokens: u.context.tokens,
   contextWindow: u.context.window,
   limits: u.rateLimits.map(l => ({ kind: l.kind, percent: l.percentUsed, resetsAt: l.resetsAt })),
-  costUsd: u.cost?.usd,
 })
 
 /** "claude-opus-5-5[1m]" → "Opus 5.5 1M", "sonnet" → "Sonnet". */
@@ -42,17 +40,50 @@ export const prettyModel = (id: string) => {
   return is1m ? `${base} 1M` : base
 }
 
-/** Kalan süre: "45d", "1s12d", "3g4s" (gün, saat, dakika). */
+/** A duration: "45m", "1h12m", "3d4h". */
+export const formatDuration = (ms: number) => {
+  const minutes = Math.max(0, Math.ceil(ms / 60_000))
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h${minutes % 60 ? `${minutes % 60}m` : ''}`
+  const days = Math.floor(hours / 24)
+  return `${days}d${hours % 24 ? `${hours % 24}h` : ''}`
+}
+
+/** Time left until `resetsAt`; undefined when unknown or already past. */
 export const countdown = (resetsAt: string | undefined, now: number) => {
   if (!resetsAt) return undefined
   const ms = Date.parse(resetsAt) - now
-  if (Number.isNaN(ms)) return undefined
-  const minutes = Math.max(0, Math.ceil(ms / 60_000))
-  if (minutes < 60) return `${minutes}d`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}s${minutes % 60 ? `${minutes % 60}d` : ''}`
-  const days = Math.floor(hours / 24)
-  return `${days}g${hours % 24 ? `${hours % 24}s` : ''}`
+  if (Number.isNaN(ms) || ms <= 0) return undefined
+  return formatDuration(ms)
+}
+
+/** Whether the window `resetsAt` closes has already reset. */
+export const hasReset = (resetsAt: string | undefined, now: number) => {
+  const at = resetsAt ? Date.parse(resetsAt) : Number.NaN
+  return !Number.isNaN(at) && at <= now
+}
+
+const WINDOWS: Record<string, number> = {
+  five_hour: 5 * 3_600_000,
+  seven_day: 7 * 86_400_000,
+}
+
+/**
+ * The pace of a limit's window: the usage it ends at if spent at the rate so
+ * far, and how long until it runs out at that rate. Undefined when the window
+ * is unknown or too young (under a tenth gone) for the rate to mean much.
+ */
+export const paceOf = (kind: string, percent: number, resetsAt: string | undefined, now: number) => {
+  const length = WINDOWS[kind]
+  if (!length || !resetsAt || percent <= 0) return undefined
+  const left = Date.parse(resetsAt) - now
+  if (Number.isNaN(left) || left <= 0 || left > length) return undefined
+  const elapsed = length - left
+  if (elapsed < length / 10) return undefined
+  const projected = (percent / elapsed) * length
+  const untilFull = percent >= 100 ? 0 : (elapsed * (100 - percent)) / percent
+  return { projected, untilFull, isAhead: projected > 100 && untilFull < left }
 }
 
 export const colorOf = (percent: number, warnAt = 70, dangerAt = 90) =>
@@ -80,8 +111,6 @@ export const formatPercent = (p: number) => `${Math.round(p)}%`
 
 export const formatTokens = (n: number) =>
   n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`
-
-export const formatCost = (usd: number) => `$${usd < 10 ? usd.toFixed(2) : usd.toFixed(1)}`
 
 /** The highest threshold `percent` has reached, 0 below all. */
 export const levelOf = (percent: number, thresholds: readonly number[]) =>

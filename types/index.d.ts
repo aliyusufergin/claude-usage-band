@@ -5,7 +5,6 @@ export type Snapshot = {
   contextTokens?: number
   contextWindow: number
   limits: Limit[]
-  costUsd?: number
 }
 
 export type ModelInfo = { model?: string; effort?: string }
@@ -20,6 +19,8 @@ declare module 'claude-code' {
       model: ModelInfo
       /** Token count auto-compaction runs at; null when off or unknown. */
       compactAt: number | null
+      /** Context tokens when the main loop's current turn began. */
+      turnBase: number | null
       prefs: Prefs
     }
   }
