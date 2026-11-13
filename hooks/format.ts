@@ -91,19 +91,6 @@ export const colorOf = (percent: number, warnAt = 70, dangerAt = 90) =>
 
 const clamp = (percent: number) => Math.min(100, Math.max(0, percent))
 
-/** /context gibi disk hücreleri: ⛁ dolu, ⛀ yarım, ⛶ boş. */
-export const cells = (percent: number, width: number) => {
-  let filled = ''
-  let empty = ''
-  for (let i = 0; i < width; i++) {
-    const v = (clamp(percent) / 100) * width - i
-    if (v >= 0.75) filled += '⛁'
-    else if (v >= 0.25) filled += '⛀'
-    else empty += '⛶'
-  }
-  return { filled, empty }
-}
-
 /** Tek karakterlik pasta: ○ ◔ ◑ ◕ ●. */
 export const pie = (percent: number) => '○◔◑◕●'.charAt(Math.round(clamp(percent) / 25))
 

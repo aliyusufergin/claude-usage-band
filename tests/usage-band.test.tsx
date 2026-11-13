@@ -120,8 +120,8 @@ describe('format', () => {
   })
 
   test('config falls back to defaults on bad values', () => {
-    const config = readConfig({ barWidth: 50, showPace: 'yes', toastAt: 75 })
-    expect(config.barWidth).toBe(20)
+    const config = readConfig({ showPies: 'no', showPace: 'yes', toastAt: 75 })
+    expect(config.showPies).toBe(true)
     expect(config.showPace).toBe(true)
     expect(config.toastAt).toBe(75)
   })
@@ -144,14 +144,14 @@ for (const surface of SURFACES) {
     const text = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
 
     expect(text).toContain('⏺ Opus 5.5 high')
-    expect(text).toContain('ctx ⛁⛁⛁⛁⛶⛶⛶⛶⛶⛶ 42% ⇣60k')
+    expect(text).toContain('ctx ◑ 42% ⇣60k')
     expect(text).toContain('5h ◔ 23% ↻1h12m')
     expect(text).toContain('7d ◑ 61%▴ ↻3d')
     expect(text).not.toContain('$')
   })
 }
 
-test('options hide segments and narrow the bars', { options: { showPace: false, showModel: false, barWidth: 4 } }, async ($, on) => {
+test('options hide segments and the pies', { options: { showPace: false, showModel: false, showPies: false } }, async ($, on) => {
   engine(on)
   await $.session.measure(measure(50, 61))
 
@@ -159,18 +159,18 @@ test('options hide segments and narrow the bars', { options: { showPace: false, 
   const text = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
 
   expect(text).not.toContain('▴')
-  expect(text).toContain('ctx ⛁⛀⛶⛶ 42%')
-  expect(text).toContain('5h ◑ 50%')
+  expect(text).toContain('ctx 42%')
+  expect(text).toContain('5h 50%')
 })
 
-test('narrow band drops the bars, then the countdowns', async ($, on) => {
+test('narrow band drops the pies, then the countdowns', async ($, on) => {
   engine(on)
   await $.session.measure(measure(23, 61))
 
   const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'terminal', component: 'AbovePrompt', props: bandProps(40) })
   const text = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
 
-  expect(text).not.toContain('⛁')
+  expect(text).not.toContain('◑')
   expect(text).not.toContain('◔')
   expect(text).toContain('5h 23%')
 })
@@ -183,7 +183,7 @@ test('/usage-band hides the band and toggles compact mode', async ($, on) => {
   expect((await $.command.run(runCommand('kompakt'))).text).toBe('Kullanım bandı kompakt modda.')
   const compact = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
   expect(compact).toContain('5h 23%')
-  expect(compact).not.toContain('⛁')
+  expect(compact).not.toContain('◑')
 
   expect((await $.command.run(runCommand(''))).text).toBe('Kullanım bandı gizlendi.')
   expect(await ui.findAll({ type: 'Text', text: '5h' })).toHaveLength(0)

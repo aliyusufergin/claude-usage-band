@@ -5,7 +5,6 @@ import type { ModelInfo, Prefs, Snapshot } from '../types'
 import { readConfig } from './config'
 import type { Config } from './config'
 import {
-  cells,
   colorOf,
   countdown,
   formatDuration,
@@ -36,20 +35,19 @@ type Alerted = Record<string, { level: number; resetsAt?: string }>
 
 type Part = { text: string; color?: string; dim?: boolean }
 /** `showExtras`: the context's turn growth and distance to auto-compact. */
-type Layout = { barWidth: number; showReset: boolean; showExtras: boolean }
+type Layout = { showPies: boolean; showReset: boolean; showExtras: boolean }
 
 const SEP: Part = { text: '   ' }
 
 /** Widest first; the band takes the first one that fits its columns. */
 const layoutsFor = (config: Config, prefs: Prefs): Layout[] => {
-  const widest = prefs.isCompact ? 0 : config.barWidth
+  const showPies = config.showPies && !prefs.isCompact
   const { showReset } = config
   return [
-    { barWidth: widest, showReset, showExtras: true },
-    { barWidth: Math.min(widest, 5), showReset, showExtras: true },
-    { barWidth: 0, showReset, showExtras: true },
-    { barWidth: 0, showReset: false, showExtras: true },
-    { barWidth: 0, showReset: false, showExtras: false },
+    { showPies, showReset, showExtras: true },
+    { showPies: false, showReset, showExtras: true },
+    { showPies: false, showReset: false, showExtras: true },
+    { showPies: false, showReset: false, showExtras: false },
   ]
 }
 
@@ -62,19 +60,14 @@ export const buildParts = (
   layout: Layout,
   config: Config,
 ): Part[] => {
-  const meter = (label: string, percent: number | undefined, gauge: (p: number, color: string) => Part[]): Part[] => {
+  const meter = (label: string, percent: number | undefined): Part[] => {
     if (percent === undefined) return [{ text: `${label} —`, dim: true }]
     const color = colorOf(percent, config.warnAt, config.dangerAt)
     const parts: Part[] = [{ text: `${label} `, dim: true }]
-    if (layout.barWidth > 0) parts.push(...gauge(percent, color), { text: ' ' })
+    if (layout.showPies) parts.push({ text: `${pie(percent)} `, color })
     parts.push({ text: formatPercent(percent), color })
     return parts
   }
-  const cellGauge = (percent: number, color: string): Part[] => {
-    const { filled, empty } = cells(percent, layout.barWidth)
-    return [{ text: filled, color }, { text: empty, dim: true }]
-  }
-  const pieGauge = (percent: number, color: string): Part[] => [{ text: pie(percent), color }]
 
   const groups: Part[][] = []
 
@@ -87,7 +80,7 @@ export const buildParts = (
     groups.push([{ text: effort, dim: true }])
   }
 
-  const ctx = meter('ctx', snap?.contextPercent, cellGauge)
+  const ctx = meter('ctx', snap?.contextPercent)
   const tokens = snap?.contextTokens
   if (layout.showExtras && config.showDelta && turnBase !== null && tokens !== undefined) {
     const grown = tokens - turnBase
@@ -109,7 +102,7 @@ export const buildParts = (
       groups.push([{ text: `${labelOf(limit.kind)} sıfırlandı`, dim: true }])
       continue
     }
-    const group = meter(labelOf(limit.kind), limit.percent, pieGauge)
+    const group = meter(labelOf(limit.kind), limit.percent)
     if (config.showPace && paceOf(limit.kind, limit.percent, limit.resetsAt, now)?.isAhead) {
       group.push({ text: '▴', color: 'warning' })
     }
@@ -121,7 +114,7 @@ export const buildParts = (
   return groups.flatMap((group, i) => (i === 0 ? group : [SEP, ...group]))
 }
 
-// Kod noktası sayar: ⏺ ⛁ gibi karakterler terminalde tek hücre.
+// Kod noktası sayar: ⏺ ◑ gibi karakterler terminalde tek hücre.
 const widthOf = (parts: Part[]) => parts.reduce((n, p) => n + [...p.text].length, 0)
 
 async function readAlerted($: EngineInterface): Promise<Alerted> {
@@ -210,7 +203,7 @@ export const register: Register = (on, options) => {
 
     await $.command.register({
       name: 'usage-band',
-      description: 'Kullanım bandını gizle/göster; "kompakt" ile çubukları aç/kapa',
+      description: 'Kullanım bandını gizle/göster; "kompakt" ile daireleri aç/kapa',
       argumentHint: '[kompakt]',
     })
 
