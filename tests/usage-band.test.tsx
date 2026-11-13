@@ -146,7 +146,7 @@ for (const surface of SURFACES) {
     expect(text).toContain('⏺ Opus 5.5 high')
     expect(text).toContain('ctx ⛁⛁⛁⛁⛶⛶⛶⛶⛶⛶ 42% ⇣60k')
     expect(text).toContain('5h ◔ 23% ↻1h12m')
-    expect(text).toContain('7d ◑ 61%▲ ↻3d')
+    expect(text).toContain('7d ◑ 61%▴ ↻3d')
     expect(text).not.toContain('$')
   })
 }
@@ -158,7 +158,7 @@ test('options hide segments and narrow the bars', { options: { showPace: false, 
   const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'terminal', component: 'AbovePrompt', props: bandProps(200) })
   const text = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
 
-  expect(text).not.toContain('▲')
+  expect(text).not.toContain('▴')
   expect(text).toContain('ctx ⛁⛀⛶⛶ 42%')
   expect(text).toContain('5h ◑ 50%')
 })

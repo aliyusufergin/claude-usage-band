@@ -111,7 +111,7 @@ export const buildParts = (
     }
     const group = meter(labelOf(limit.kind), limit.percent, pieGauge)
     if (config.showPace && paceOf(limit.kind, limit.percent, limit.resetsAt, now)?.isAhead) {
-      group.push({ text: '▲', color: 'warning' })
+      group.push({ text: '▴', color: 'warning' })
     }
     const left = layout.showReset ? countdown(limit.resetsAt, now) : undefined
     if (left) group.push({ text: ` ↻${left}`, dim: true })

@@ -1,6 +1,6 @@
 {
   "name": "usage-band",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Prompt üstünde model, effort, context, 5 saatlik ve haftalık kullanımı gösteren bant",
   "author": { "name": "aliyusufergin", "email": "aliyusufergin@gmail.com" },
   "types": "./types/index.d.ts",
@@ -15,7 +15,7 @@
     "showEffort": { "type": "boolean", "title": "Effort'u göster", "description": "Bantta effort seviyesi", "default": true },
     "showCompact": { "type": "boolean", "title": "Compact mesafesini göster", "description": "Auto-compact'a kalan token", "default": true },
     "showReset": { "type": "boolean", "title": "Geri sayımı göster", "description": "5h/7d sıfırlanmaya kalan süre", "default": true },
-    "showPace": { "type": "boolean", "title": "Tempoyu göster", "description": "Bu hızla limit sıfırlanmadan dolacaksa ▲", "default": true },
+    "showPace": { "type": "boolean", "title": "Tempoyu göster", "description": "Bu hızla limit sıfırlanmadan dolacaksa ▴", "default": true },
     "showDelta": { "type": "boolean", "title": "Tur artışını göster", "description": "Son turun context'e eklediği token", "default": true }
   }
 }
