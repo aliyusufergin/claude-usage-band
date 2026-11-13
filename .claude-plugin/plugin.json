@@ -1,6 +1,6 @@
 {
   "name": "usage-band",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Prompt üstünde model, effort, context, 5 saatlik ve haftalık kullanım ile oturum maliyetini gösteren bant",
   "author": { "name": "aliyusufergin", "email": "aliyusufergin@gmail.com" },
   "types": "./types/index.d.ts",
@@ -10,8 +10,9 @@
     "notify": { "type": "boolean", "title": "Sistem bildirimi", "description": "Kritik eşikte masaüstü bildirimi gönder", "default": true },
     "warnAt": { "type": "number", "title": "Sarı renk eşiği (%)", "description": "Bu yüzdeden itibaren sarı", "default": 70, "min": 0, "max": 100 },
     "dangerAt": { "type": "number", "title": "Kırmızı renk eşiği (%)", "description": "Bu yüzdeden itibaren kırmızı", "default": 90, "min": 0, "max": 100 },
-    "barWidth": { "type": "number", "title": "Çubuk genişliği", "description": "İlerleme çubuğu karakter sayısı; 0 çubuksuz", "default": 8, "min": 0, "max": 20 },
+    "barWidth": { "type": "number", "title": "Çubuk genişliği", "description": "Context çubuğundaki hücre sayısı; 0 verilirse çubuk ve daireler yok", "default": 10, "min": 0, "max": 20 },
     "showModel": { "type": "boolean", "title": "Modeli göster", "description": "Bantta model adı", "default": true },
+    "showMode": { "type": "boolean", "title": "İzin modunu göster", "description": "Bantta auto, plan gibi izin modu", "default": true },
     "showEffort": { "type": "boolean", "title": "Effort'u göster", "description": "Bantta effort seviyesi", "default": true },
     "showCompact": { "type": "boolean", "title": "Compact mesafesini göster", "description": "Auto-compact'a kalan token", "default": true },
     "showReset": { "type": "boolean", "title": "Geri sayımı göster", "description": "5h/7d sıfırlanmaya kalan süre", "default": true },

@@ -3,15 +3,16 @@
 Claude Code için prompt'un üstünde tek satırlık bir kullanım bandı:
 
 ```
-Opus 5.5 · high │ ctx ▓▓▓░░░░░ 42% · compact'a 60k │ 5h ▓▓░░░░░░ 23% ↻1s12d │ 7d ▓▓▓▓▓░░░ 61% ↻3g │ $1.24
+⏺ Opus 5.5 high   ⏵⏵ auto   ctx ⛁⛁⛁⛁⛶⛶⛶⛶⛶⛶ 42% ⇣60k   5h ◔ 23% ↻1s12d   7d ◑ 61% ↻3g   $1.24
 ```
 
 - **Model ve effort:** ana döngünün gönderdiği son istekten
-- **ctx:** context doluluğu ve auto-compact'a kalan token
-- **5h / 7d:** 5 saatlik ve haftalık kullanım limiti, sıfırlanmaya kalan süre (g = gün, s = saat, d = dakika)
+- **İzin modu:** `⏵⏵ auto`, `⏵⏵ edits`, `⏸ plan`, `⏵⏵ bypass`; varsayılan modda görünmez. Shift+Tab ile yapılan değişiklik bir sonraki istemde, araç çağrısında ya da tur sonunda banda yansır
+- **ctx:** `/context`'teki gibi disk hücreleri (⛁ dolu, ⛀ yarım, ⛶ boş) ve auto-compact'a kalan token (⇣)
+- **5h / 7d:** 5 saatlik ve haftalık kullanım limiti tek bir pasta daireyle (○◔◑◕●), sıfırlanmaya kalan süre (g = gün, s = saat, d = dakika)
 - **Maliyet:** oturumun API maliyeti
 - Renkler: %70'e kadar yeşil, %70–90 sarı, %90 üstü kırmızı
-- Dar terminalde önce çubuklar, sonra geri sayım düşer
+- Dar terminalde önce hücreler ve daireler, sonra geri sayım düşer
 
 5h/7d bilgisi yalnızca Claude aboneliğiyle gelir; API anahtarıyla bu bölümler görünmez.
 
@@ -40,7 +41,7 @@ ardından açık oturumda `/reload-plugins`.
 ## Komutlar
 
 - `/usage-band`: bandı gizle / göster
-- `/usage-band kompakt`: çubukları kapat / aç
+- `/usage-band kompakt`: hücreleri ve daireleri kapat / aç
 
 Bu tercihler oturumlar arası hatırlanır.
 
@@ -52,8 +53,8 @@ Bu tercihler oturumlar arası hatırlanır.
 | Kritik eşik (%) | 95 | Toast ve sistem bildirimi |
 | Sistem bildirimi | açık | Kritik eşikte masaüstü bildirimi |
 | Sarı / kırmızı renk eşiği (%) | 70 / 90 | Renk geçişleri |
-| Çubuk genişliği | 8 | 0 verilirse çubuk yok |
-| Modeli / effort'u / compact mesafesini / geri sayımı / maliyeti göster | açık | Bölümleri tek tek aç/kapa |
+| Çubuk genişliği | 10 | Context hücre sayısı; 0 verilirse hücre ve daire yok |
+| Modeli / izin modunu / effort'u / compact mesafesini / geri sayımı / maliyeti göster | açık | Bölümleri tek tek aç/kapa |
 
 ## Geliştirme
 

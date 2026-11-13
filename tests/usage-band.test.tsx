@@ -47,6 +47,9 @@ const engine = (on: On, stored?: Record<string, unknown>): Seen => {
   on('turn.step', async function* (_$, e) {
     return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn', usage: null } as never
   })
+  // Settings hooks beneath: none, so nothing is added.
+  on('classic.UserPromptSubmit', () => ({}))
+  on('classic.Stop', () => ({}))
   // The engine's own band: nothing.
   on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
     const { Box } = $.ui.resolve(e)
@@ -57,6 +60,7 @@ const engine = (on: On, stored?: Record<string, unknown>): Seen => {
 
 const bandProps = (bodyColumns: number) => ({
   hasSurvey: false,
+  isCollapsed: false,
   isWorking: false,
   maxRows: 10,
   bodyColumns,
@@ -116,10 +120,10 @@ for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'usage-band', surface, component: 'AbovePrompt', props: bandProps(200) })
     const text = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
 
-    expect(text).toContain('Opus 5.5 · high')
-    expect(text).toContain("ctx ▓▓▓░░░░░ 42% · compact'a 60k")
-    expect(text).toContain('5h ▓▓░░░░░░ 23% ↻1s12d')
-    expect(text).toContain('7d ▓▓▓▓▓░░░ 61% ↻3g')
+    expect(text).toContain('⏺ Opus 5.5 high')
+    expect(text).toContain('ctx ⛁⛁⛁⛁⛶⛶⛶⛶⛶⛶ 42% ⇣60k')
+    expect(text).toContain('5h ◔ 23% ↻1s12d')
+    expect(text).toContain('7d ◑ 61% ↻3g')
     expect(text).toContain('$1.24')
   })
 }
@@ -132,7 +136,8 @@ test('options hide segments and narrow the bars', { options: { showCost: false, 
   const text = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
 
   expect(text).not.toContain('$')
-  expect(text).toContain('5h ▓▓░░ 50%')
+  expect(text).toContain('ctx ⛁⛀⛶⛶ 42%')
+  expect(text).toContain('5h ◑ 50%')
 })
 
 test('narrow band drops the bars, then the countdowns', async ($, on) => {
@@ -142,8 +147,30 @@ test('narrow band drops the bars, then the countdowns', async ($, on) => {
   const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'terminal', component: 'AbovePrompt', props: bandProps(40) })
   const text = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
 
-  expect(text).not.toContain('▓')
+  expect(text).not.toContain('⛁')
+  expect(text).not.toContain('◔')
   expect(text).toContain('5h 23%')
+})
+
+test('band shows the main loop permission mode, not a subagent one', async ($, on) => {
+  engine(on)
+  await $.session.measure(measure(23, 61))
+  const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'terminal', component: 'AbovePrompt', props: bandProps(200) })
+  const text = async () => (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
+
+  expect(await text()).not.toContain('⏵⏵')
+
+  await $.classic.UserPromptSubmit({ prompt: 'merhaba', permission_mode: 'auto' })
+  expect(await text()).toContain('⏵⏵ auto')
+
+  await $.classic.Stop({ stop_hook_active: false, permission_mode: 'plan', agent_id: 'a1' } as never)
+  expect(await text()).toContain('⏵⏵ auto')
+
+  await $.classic.Stop({ stop_hook_active: false, permission_mode: 'plan' } as never)
+  expect(await text()).toContain('⏸ plan')
+
+  await $.classic.UserPromptSubmit({ prompt: 'devam', permission_mode: 'default' })
+  expect(await text()).not.toContain('⏸')
 })
 
 test('/usage-band hides the band and toggles compact mode', async ($, on) => {
@@ -154,7 +181,7 @@ test('/usage-band hides the band and toggles compact mode', async ($, on) => {
   expect((await $.command.run(runCommand('kompakt'))).text).toBe('Kullanım bandı kompakt modda.')
   const compact = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('')
   expect(compact).toContain('5h 23%')
-  expect(compact).not.toContain('▓')
+  expect(compact).not.toContain('⛁')
 
   expect((await $.command.run(runCommand(''))).text).toBe('Kullanım bandı gizlendi.')
   expect(await ui.findAll({ type: 'Text', text: '5h' })).toHaveLength(0)

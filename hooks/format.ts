@@ -58,10 +58,34 @@ export const countdown = (resetsAt: string | undefined, now: number) => {
 export const colorOf = (percent: number, warnAt = 70, dangerAt = 90) =>
   percent >= dangerAt ? 'error' : percent >= warnAt ? 'warning' : 'success'
 
-export const bar = (percent: number, width: number) => {
-  const filled = Math.min(width, Math.max(0, Math.round((percent / 100) * width)))
-  return '▓'.repeat(filled) + '░'.repeat(width - filled)
+const clamp = (percent: number) => Math.min(100, Math.max(0, percent))
+
+/** /context gibi disk hücreleri: ⛁ dolu, ⛀ yarım, ⛶ boş. */
+export const cells = (percent: number, width: number) => {
+  let filled = ''
+  let empty = ''
+  for (let i = 0; i < width; i++) {
+    const v = (clamp(percent) / 100) * width - i
+    if (v >= 0.75) filled += '⛁'
+    else if (v >= 0.25) filled += '⛀'
+    else empty += '⛶'
+  }
+  return { filled, empty }
 }
+
+/** Tek karakterlik pasta: ○ ◔ ◑ ◕ ●. */
+export const pie = (percent: number) => '○◔◑◕●'.charAt(Math.round(clamp(percent) / 25))
+
+const MODES: Record<string, { text: string; color: string }> = {
+  auto: { text: '⏵⏵ auto', color: 'autoAccept' },
+  acceptEdits: { text: '⏵⏵ edits', color: 'autoAccept' },
+  plan: { text: '⏸ plan', color: 'planMode' },
+  bypassPermissions: { text: '⏵⏵ bypass', color: 'error' },
+  dontAsk: { text: '⏵⏵ dontAsk', color: 'permission' },
+}
+
+/** İzin modunun etiketi; `default` ve bilinmeyen modlar için yok. */
+export const modeOf = (mode: string | undefined) => (mode ? MODES[mode] : undefined)
 
 export const formatPercent = (p: number) => `${Math.round(p)}%`
 

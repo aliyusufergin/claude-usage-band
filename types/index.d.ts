@@ -21,6 +21,8 @@ declare module 'claude-code' {
       /** Token count auto-compaction runs at; null when off or unknown. */
       compactAt: number | null
       prefs: Prefs
+      /** Ana döngünün izin modu (auto, plan, ...); henüz bilinmiyorsa null. */
+      mode: string | null
     }
   }
 }

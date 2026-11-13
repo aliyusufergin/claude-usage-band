@@ -5,7 +5,7 @@ import type { ModelInfo, Prefs, Snapshot } from '../types'
 import { readConfig } from './config'
 import type { Config } from './config'
 import {
-  bar,
+  cells,
   colorOf,
   countdown,
   formatCost,
@@ -14,7 +14,9 @@ import {
   isSameWindow,
   labelOf,
   levelOf,
+  modeOf,
   nameOf,
+  pie,
   prettyModel,
   toSnapshot,
 } from './format'
@@ -22,6 +24,7 @@ import {
 const snapAtom = atom({ plugin: 'usage-band', key: 'snap' } as const, null)
 const modelAtom = atom({ plugin: 'usage-band', key: 'model' } as const, {})
 const compactAtom = atom({ plugin: 'usage-band', key: 'compactAt' } as const, null)
+const modeAtom = atom({ plugin: 'usage-band', key: 'mode' } as const, null)
 const prefsAtom = atom({ plugin: 'usage-band', key: 'prefs' } as const, { isHidden: false, isCompact: false })
 
 // $.store keys, kept across sessions.
@@ -33,7 +36,7 @@ type Alerted = Record<string, { level: number; resetsAt?: string }>
 type Part = { text: string; color?: string; dim?: boolean }
 type Layout = { barWidth: number; showReset: boolean; showCompact: boolean }
 
-const SEP: Part = { text: ' │ ', dim: true }
+const SEP: Part = { text: '   ' }
 
 /** Widest first; the band takes the first one that fits its columns. */
 const layoutsFor = (config: Config, prefs: Prefs): Layout[] => {
@@ -50,44 +53,53 @@ const layoutsFor = (config: Config, prefs: Prefs): Layout[] => {
 export const buildParts = (
   snap: Snapshot | null,
   model: ModelInfo,
+  mode: string | null,
   compactAt: number | null,
   now: number,
   layout: Layout,
   config: Config,
 ): Part[] => {
-  const meter = (label: string, percent: number | undefined): Part[] => {
+  const meter = (label: string, percent: number | undefined, gauge: (p: number, color: string) => Part[]): Part[] => {
     if (percent === undefined) return [{ text: `${label} —`, dim: true }]
     const color = colorOf(percent, config.warnAt, config.dangerAt)
     const parts: Part[] = [{ text: `${label} `, dim: true }]
-    if (layout.barWidth > 0) parts.push({ text: `${bar(percent, layout.barWidth)} `, color })
+    if (layout.barWidth > 0) parts.push(...gauge(percent, color), { text: ' ' })
     parts.push({ text: formatPercent(percent), color })
     return parts
   }
+  const cellGauge = (percent: number, color: string): Part[] => {
+    const { filled, empty } = cells(percent, layout.barWidth)
+    return [{ text: filled, color }, { text: empty, dim: true }]
+  }
+  const pieGauge = (percent: number, color: string): Part[] => [{ text: pie(percent), color }]
 
   const groups: Part[][] = []
 
   const effort = config.showEffort ? model.effort : undefined
   if (config.showModel && model.model) {
-    const group: Part[] = [{ text: prettyModel(model.model), color: 'claude' }]
-    if (effort) group.push({ text: ` · ${effort}`, dim: true })
+    const group: Part[] = [{ text: `⏺ ${prettyModel(model.model)}`, color: 'claude' }]
+    if (effort) group.push({ text: ` ${effort}`, dim: true })
     groups.push(group)
   } else if (effort) {
     groups.push([{ text: effort, dim: true }])
   }
 
-  const ctx = meter('ctx', snap?.contextPercent)
+  const modeLabel = config.showMode ? modeOf(mode ?? undefined) : undefined
+  if (modeLabel) groups.push([modeLabel])
+
+  const ctx = meter('ctx', snap?.contextPercent, cellGauge)
   if (layout.showCompact && compactAt !== null && snap?.contextTokens !== undefined) {
     const left = compactAt - snap.contextTokens
     ctx.push(
       left > 0
-        ? { text: ` · compact'a ${formatTokens(left)}`, dim: true }
-        : { text: ' · compact yakın', color: 'warning' },
+        ? { text: ` ⇣${formatTokens(left)}`, dim: true }
+        : { text: ' ⇣ compact yakın', color: 'warning' },
     )
   }
   groups.push(ctx)
 
   for (const limit of snap?.limits ?? []) {
-    const group = meter(labelOf(limit.kind), limit.percent)
+    const group = meter(labelOf(limit.kind), limit.percent, pieGauge)
     const left = layout.showReset ? countdown(limit.resetsAt, now) : undefined
     if (left) group.push({ text: ` ↻${left}`, dim: true })
     groups.push(group)
@@ -98,7 +110,8 @@ export const buildParts = (
   return groups.flatMap((group, i) => (i === 0 ? group : [SEP, ...group]))
 }
 
-const widthOf = (parts: Part[]) => parts.reduce((n, p) => n + p.text.length, 0)
+// Kod noktası sayar: ⏺ ⛁ gibi karakterler terminalde tek hücre.
+const widthOf = (parts: Part[]) => parts.reduce((n, p) => n + [...p.text].length, 0)
 
 async function readAlerted($: EngineInterface): Promise<Alerted> {
   const value = await $.store.get(ALERTED_KEY)
@@ -165,6 +178,13 @@ async function alertLimits($: EngineInterface, limits: SessionRateLimit[], confi
   if (isChanged) await $.store.set(ALERTED_KEY, next)
 }
 
+/** Ana döngünün izin modunu kaydeder; alt ajanlarınkini yok sayar. */
+async function trackMode($: EngineInterface, e: { permission_mode?: string; agent_id?: string }) {
+  if (e.agent_id || !e.permission_mode) return
+  const mode = e.permission_mode
+  if ((await read($, modeAtom)) !== mode) await update($, modeAtom, () => mode)
+}
+
 export const register: Register = (on, options) => {
   const config = readConfig(options)
   // A reload may bring new options: read the threshold afresh.
@@ -223,6 +243,21 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // İzin modu yalnızca klasik hook olaylarıyla gelir: istem, araç çağrısı ve tur sonu.
+  // Shift+Tab ile değişen mod bir sonraki bu olaylardan birinde banda yansır.
+  on('classic.UserPromptSubmit', async ($, e, next) => {
+    await trackMode($, e)
+    return next(e)
+  })
+  on('classic.PostToolUse', async ($, e, next) => {
+    await trackMode($, e)
+    return next(e)
+  })
+  on('classic.Stop', async ($, e, next) => {
+    await trackMode($, e)
+    return next(e)
+  })
+
   // The model and effort the main loop actually sends, after /model or a fallback.
   on('turn.step', async function* ($, e, next) {
     if (!e.agentId) {
@@ -246,9 +281,10 @@ export const register: Register = (on, options) => {
     if (!snap && !model.model) return next(e)
 
     const compactAt = await read($, compactAtom)
+    const mode = await read($, modeAtom)
     const now = await $.clock.now()
     const columns = e.props.bodyColumns
-    const candidates = layoutsFor(config, prefs).map(layout => buildParts(snap, model, compactAt, now, layout, config))
+    const candidates = layoutsFor(config, prefs).map(layout => buildParts(snap, model, mode, compactAt, now, layout, config))
     const parts = candidates.find(p => widthOf(p) <= columns) ?? candidates[candidates.length - 1] ?? []
 
     const { Box, Text } = $.ui.resolve(e)
