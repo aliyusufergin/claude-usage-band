@@ -109,6 +109,8 @@ for (const surface of SURFACES) {
     expect(text).toContain('5h ◔ 23% ↻1h12m')
     expect(text).toContain('7d ◑ 61% ↻3d')
     expect(text).not.toContain('$')
+    const boxes = await ui.findAll({ type: 'Box' })
+    expect(boxes.some(b => b.props.justifyContent === 'center')).toBe(true)
   })
 }
 

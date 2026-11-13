@@ -196,7 +196,7 @@ export const register: Register = (on, options) => {
     const { Box, Text } = $.ui.resolve(e)
 
     return (
-      <Box>
+      <Box width="100%" justifyContent="center">
         {parts.map((p, i) => (
           <Text key={`p${i}`} color={p.color} dimColor={p.dim} wrap="truncate">
             {p.text}
