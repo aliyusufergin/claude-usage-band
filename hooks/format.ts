@@ -23,7 +23,6 @@ export const toSnapshot = (u: {
 }): Snapshot => ({
   contextPercent: u.context.percent,
   contextTokens: u.context.tokens,
-  contextWindow: u.context.window,
   limits: u.rateLimits.map(l => ({ kind: l.kind, percent: l.percentUsed, resetsAt: l.resetsAt })),
 })
 
@@ -41,7 +40,7 @@ export const prettyModel = (id: string) => {
 }
 
 /** A duration: "45m", "1h12m", "3d4h". */
-export const formatDuration = (ms: number) => {
+const formatDuration = (ms: number) => {
   const minutes = Math.max(0, Math.ceil(ms / 60_000))
   if (minutes < 60) return `${minutes}m`
   const hours = Math.floor(minutes / 60)
@@ -64,30 +63,7 @@ export const hasReset = (resetsAt: string | undefined, now: number) => {
   return !Number.isNaN(at) && at <= now
 }
 
-const WINDOWS: Record<string, number> = {
-  five_hour: 5 * 3_600_000,
-  seven_day: 7 * 86_400_000,
-}
-
-/**
- * The pace of a limit's window: the usage it ends at if spent at the rate so
- * far, and how long until it runs out at that rate. Undefined when the window
- * is unknown or too young (under a tenth gone) for the rate to mean much.
- */
-export const paceOf = (kind: string, percent: number, resetsAt: string | undefined, now: number) => {
-  const length = WINDOWS[kind]
-  if (!length || !resetsAt || percent <= 0) return undefined
-  const left = Date.parse(resetsAt) - now
-  if (Number.isNaN(left) || left <= 0 || left > length) return undefined
-  const elapsed = length - left
-  if (elapsed < length / 10) return undefined
-  const projected = (percent / elapsed) * length
-  const untilFull = percent >= 100 ? 0 : (elapsed * (100 - percent)) / percent
-  return { projected, untilFull, isAhead: projected > 100 && untilFull < left }
-}
-
-export const colorOf = (percent: number, warnAt = 70, dangerAt = 90) =>
-  percent >= dangerAt ? 'error' : percent >= warnAt ? 'warning' : 'success'
+export const colorOf = (percent: number) => (percent >= 90 ? 'error' : percent >= 70 ? 'warning' : 'success')
 
 const clamp = (percent: number) => Math.min(100, Math.max(0, percent))
 
@@ -95,9 +71,6 @@ const clamp = (percent: number) => Math.min(100, Math.max(0, percent))
 export const pie = (percent: number) => '○◔◑◕●'.charAt(Math.round(clamp(percent) / 25))
 
 export const formatPercent = (p: number) => `${Math.round(p)}%`
-
-export const formatTokens = (n: number) =>
-  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`
 
 /** The highest threshold `percent` has reached, 0 below all. */
 export const levelOf = (percent: number, thresholds: readonly number[]) =>
